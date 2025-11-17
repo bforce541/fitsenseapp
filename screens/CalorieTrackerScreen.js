@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Platform, Alert } from 'react-native';
 import { Text, TextInput, Button } from 'react-native-paper';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../utils/supabase';
@@ -47,7 +47,7 @@ const CalorieTrackerScreen = () => {
           {
             event: '*', // Listen to INSERT, UPDATE, and DELETE
             schema: 'public',
-            table: 'calorie_entries',
+          table: 'calorie_tracker',
             filter: `user_id=eq.${user.id}`, // Only listen to changes for current user
           },
           (payload) => {
@@ -139,21 +139,41 @@ const CalorieTrackerScreen = () => {
   };
 
   const handleSave = async () => {
-    if (!calories || isNaN(calories) || parseInt(calories) < 0) {
+    const caloriesValue = calories.trim();
+    
+    if (!caloriesValue) {
+      Alert.alert('Error', 'Please enter a calorie amount');
+      return;
+    }
+
+    const caloriesNum = parseInt(caloriesValue);
+    if (isNaN(caloriesNum) || caloriesNum < 0) {
+      Alert.alert('Error', 'Please enter a valid positive number');
       return;
     }
 
     try {
-      await addCalorieEntry(selectedDate, parseInt(calories));
-      // Reload the data to update the display
+      // Save the calorie entry
+      await addCalorieEntry(selectedDate, caloriesNum);
+      
+      // Immediately update the display with the saved value
+      setTodayCalories(caloriesNum);
+      
+      // Reload data to ensure consistency
       await loadTodayCalories();
+      
+      // Reload chart data if in month/year view
       if (viewMode === 'month') {
-        loadMonthlyData();
+        await loadMonthlyData();
       } else if (viewMode === 'year') {
-        loadYearlyData();
+        await loadYearlyData();
       }
+      
+      // Show success feedback
+      Alert.alert('Success', `Saved ${caloriesNum} calories for ${formatDate(selectedDate)}`);
     } catch (error) {
       console.error('Error saving calories:', error);
+      Alert.alert('Error', error.message || 'Failed to save calories. Please try again.');
     }
   };
 

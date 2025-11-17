@@ -2,6 +2,8 @@ import React, { createContext, useState, useEffect, useContext } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../utils/supabase';
 
+const CALORIE_TABLE = 'calorie_tracker';
+
 const AppContext = createContext();
 
 export const useApp = () => {
@@ -162,21 +164,46 @@ export const AppProvider = ({ children }) => {
   };
 
   const loadUserStats = async (userId) => {
-    try {
-      const { data, error } = await supabase
-        .from('user_stats')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
+    if (!userId) return;
 
-      if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows returned
-      
-      if (data) {
-        setQuestionsAsked(data.questions_asked || 0);
-        setSupportsGiven(data.supports_given || 0);
-      }
+    try {
+      // Count questions asked by this user
+      const { count: questionsCount, error: questionsError } = await supabase
+        .from('questions')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId);
+
+      if (questionsError) throw questionsError;
+
+      // Count supports given (votes table where user voted "support")
+      const { count: supportsCount, error: supportsError } = await supabase
+        .from('votes')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('vote_type', 'support');
+
+      if (supportsError) throw supportsError;
+
+      const safeQuestions = questionsCount || 0;
+      const safeSupports = supportsCount || 0;
+
+      setQuestionsAsked(safeQuestions);
+      setSupportsGiven(safeSupports);
+
+      // Persist the stats in user_stats table for quick access if needed
+      await supabase
+        .from('user_stats')
+        .upsert({
+          user_id: userId,
+          user_email: user?.email || '',
+          questions_asked: safeQuestions,
+          supports_given: safeSupports,
+        }, { onConflict: 'user_id' });
     } catch (error) {
       console.error('Error loading user stats:', error);
+      // Fallback to current state or zero
+      setQuestionsAsked(prev => prev || 0);
+      setSupportsGiven(prev => prev || 0);
     }
   };
 
@@ -380,6 +407,8 @@ export const AppProvider = ({ children }) => {
             questions_asked: newCount,
             supports_given: supportsGiven,
           }, { onConflict: 'user_id' });
+
+        await loadUserStats(user.id);
       } else {
         setQuestionsAsked(prev => prev + 1);
       }
@@ -463,6 +492,8 @@ export const AppProvider = ({ children }) => {
             questions_asked: questionsAsked,
             supports_given: newCount,
           }, { onConflict: 'user_id' });
+
+        await loadUserStats(user.id);
       }
 
       // Reload questions to get updated counts
@@ -491,19 +522,24 @@ export const AppProvider = ({ children }) => {
         throw new Error('Must be logged in to track calories');
       }
 
-      // First, try to update existing entry for this date
+      // First, try to find existing entry for this date
       const { data: existingData, error: checkError } = await supabase
-        .from('calorie_entries')
+        .from(CALORIE_TABLE)
         .select('id')
         .eq('user_id', user.id)
         .eq('date', date)
-        .single();
+        .maybeSingle();
+
+      // If there's an error other than "no rows", throw it
+      if (checkError && checkError.code !== 'PGRST116') {
+        throw checkError;
+      }
 
       let result;
-      if (existingData) {
+      if (existingData && existingData.id) {
         // Update existing entry
         const { data, error } = await supabase
-          .from('calorie_entries')
+          .from(CALORIE_TABLE)
           .update({
             calories: calories,
             updated_at: new Date().toISOString(),
@@ -517,7 +553,7 @@ export const AppProvider = ({ children }) => {
       } else {
         // Insert new entry
         const { data, error } = await supabase
-          .from('calorie_entries')
+          .from(CALORIE_TABLE)
           .insert({
             user_id: user.id,
             date: date,
@@ -544,7 +580,7 @@ export const AppProvider = ({ children }) => {
       }
 
       const { data, error } = await supabase
-        .from('calorie_entries')
+        .from(CALORIE_TABLE)
         .select('*')
         .eq('user_id', user.id)
         .gte('date', startDate)
@@ -570,7 +606,7 @@ export const AppProvider = ({ children }) => {
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
       const { data, error } = await supabase
-        .from('calorie_entries')
+        .from(CALORIE_TABLE)
         .select('date, calories')
         .eq('user_id', user.id)
         .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
@@ -609,7 +645,7 @@ export const AppProvider = ({ children }) => {
       const yearStart = new Date(now.getFullYear(), 0, 1);
 
       const { data, error } = await supabase
-        .from('calorie_entries')
+        .from(CALORIE_TABLE)
         .select('date, calories')
         .eq('user_id', user.id)
         .gte('date', yearStart.toISOString().split('T')[0])
@@ -672,6 +708,7 @@ export const AppProvider = ({ children }) => {
         voteQuestion,
         updateSettings,
         getTrendingQuestions,
+        loadUserStats,
         addCalorieEntry,
         getCalorieEntries,
         getMonthlyCalories,
