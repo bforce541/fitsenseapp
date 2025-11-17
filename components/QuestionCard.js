@@ -1,64 +1,80 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Card } from 'react-native-paper';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import VoteButtons from './VoteButtons';
 
 const QuestionCard = ({ question, answer, supports, dontSupports, questionId, onVote, hasVoted }) => {
   return (
-    <Card style={styles.card}>
-      <Card.Content>
-        <Text style={styles.questionText}>{question}</Text>
-        <Text style={styles.answerText}>{answer}</Text>
-        <View style={styles.statsContainer}>
-          <Text style={styles.statsText}>👍 {supports} | 👎 {dontSupports}</Text>
-        </View>
-        {!hasVoted && (
-          <VoteButtons
-            questionId={questionId}
-            onVote={onVote}
-          />
-        )}
-        {hasVoted && (
-          <Text style={styles.votedText}>You've already voted on this question</Text>
-        )}
-      </Card.Content>
-    </Card>
+    <View style={styles.card}>
+      <Text style={styles.questionText}>{question}</Text>
+      <Text style={styles.answerText}>{answer}</Text>
+      <View style={styles.statsContainer}>
+        <TouchableOpacity style={styles.statButton}>
+          <Text style={styles.statButtonText}>👍 {supports}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.statButton}>
+          <Text style={styles.statButtonText}>👎 {dontSupports}</Text>
+        </TouchableOpacity>
+      </View>
+      {!hasVoted && (
+        <VoteButtons
+          questionId={questionId}
+          onVote={onVote}
+        />
+      )}
+      {hasVoted && (
+        <Text style={styles.votedText}>You've already voted on this question</Text>
+      )}
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   card: {
-    marginVertical: 8,
-    marginHorizontal: 16,
-    elevation: 3,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   questionText: {
     fontSize: 18,
     fontWeight: 'bold',
+    color: '#1F2937',
     marginBottom: 12,
-    color: '#333',
   },
   answerText: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#666',
-    marginBottom: 12,
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#374151',
+    marginBottom: 16,
   },
   statsContainer: {
-    marginTop: 8,
-    marginBottom: 8,
+    flexDirection: 'row',
+    marginBottom: 12,
+    gap: 12,
   },
-  statsText: {
+  statButton: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  statButtonText: {
     fontSize: 14,
-    color: '#888',
+    color: '#6B7280',
+    fontWeight: '500',
   },
   votedText: {
     fontSize: 12,
-    color: '#999',
+    color: '#9CA3AF',
     fontStyle: 'italic',
     marginTop: 8,
+    textAlign: 'center',
   },
 });
 
 export default QuestionCard;
-

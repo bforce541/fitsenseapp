@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
-import { TextInput, Button, Text, Card, Chip } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, Alert, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { TextInput, Text } from 'react-native-paper';
 import { useApp } from '../context/AppContext';
 import { askOpenAI } from '../utils/openai';
 
@@ -44,144 +44,229 @@ const AskAIScreen = () => {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.content}>
-        <Text variant="headlineMedium" style={styles.title}>
-          Ask AI
-        </Text>
-        <Text variant="bodyMedium" style={styles.subtitle}>
-          Get instant fitness and health advice
-        </Text>
+    <View style={styles.container}>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.title}>Ask a Question</Text>
+        <Text style={styles.subtitle}>Your fitness questions, answered by AI</Text>
 
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text variant="titleMedium" style={styles.sectionTitle}>
-              Preset Questions
-            </Text>
-            <View style={styles.chipContainer}>
-              {PRESET_QUESTIONS.map((preset, index) => (
-                <Chip
-                  key={index}
-                  onPress={() => handlePresetQuestion(preset)}
-                  style={styles.chip}
-                  mode="outlined"
-                >
-                  {preset}
-                </Chip>
-              ))}
-            </View>
-          </Card.Content>
-        </Card>
+        <View style={styles.presetContainer}>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.presetScrollContent}
+          >
+            {PRESET_QUESTIONS.map((preset, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.presetChip}
+                onPress={() => handlePresetQuestion(preset)}
+              >
+                <Text style={styles.presetChipText}>{preset}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
 
-        <Card style={styles.card}>
-          <Card.Content>
-            <TextInput
-              label="Your Question"
-              value={question}
-              onChangeText={setQuestion}
-              mode="outlined"
-              multiline
-              numberOfLines={4}
-              placeholder="Ask anything about fitness or health..."
-              style={styles.input}
-            />
-            <Button
-              mode="contained"
-              onPress={handleAskAI}
-              style={styles.button}
-              disabled={loading || !question.trim()}
-              loading={loading}
-            >
-              Ask AI
-            </Button>
-          </Card.Content>
-        </Card>
+        <View style={styles.inputCard}>
+          <TextInput
+            placeholder="Type your question..."
+            value={question}
+            onChangeText={setQuestion}
+            mode="flat"
+            multiline
+            numberOfLines={6}
+            style={styles.textInput}
+            contentStyle={styles.textInputContent}
+            theme={{
+              colors: {
+                primary: '#00C896',
+                text: '#1F2937',
+                placeholder: '#9CA3AF',
+                background: '#FFFFFF',
+              },
+            }}
+          />
+        </View>
+
+        <TouchableOpacity
+          style={[styles.askButton, (loading || !question.trim()) && styles.askButtonDisabled]}
+          onPress={handleAskAI}
+          disabled={loading || !question.trim()}
+        >
+          {loading ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.askButtonText}>Ask</Text>
+          )}
+        </TouchableOpacity>
 
         {loading && (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#2196F3" />
+            <ActivityIndicator size="large" color="#00C896" />
             <Text style={styles.loadingText}>Getting AI response...</Text>
           </View>
         )}
 
         {answer && (
-          <Card style={styles.answerCard}>
-            <Card.Content>
-              <Text variant="titleMedium" style={styles.answerTitle}>
-                AI Response
-              </Text>
-              <Text style={styles.answerText}>{answer}</Text>
-            </Card.Content>
-          </Card>
+          <View style={styles.responseCard}>
+            <Text style={styles.responseTitle}>AI Response</Text>
+            <Text style={styles.responseText}>{answer}</Text>
+            <View style={styles.feedbackContainer}>
+              <TouchableOpacity style={styles.feedbackButton}>
+                <Text style={styles.feedbackButtonText}>👍 Helpful</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.feedbackButton, styles.feedbackButtonRed]}>
+                <Text style={[styles.feedbackButtonText, styles.feedbackButtonTextRed]}>👎 Not Helpful</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         )}
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#0A0F23',
   },
-  content: {
-    padding: 16,
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
   },
   title: {
-    marginBottom: 8,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#2196F3',
+    color: '#FFFFFF',
+    marginBottom: 8,
   },
   subtitle: {
+    fontSize: 16,
+    color: '#9CA3AF',
     marginBottom: 24,
-    color: '#666',
   },
-  card: {
-    marginBottom: 16,
-    elevation: 2,
+  presetContainer: {
+    marginBottom: 20,
   },
-  sectionTitle: {
-    marginBottom: 12,
-    fontWeight: 'bold',
+  presetScrollContent: {
+    paddingRight: 20,
   },
-  chipContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+  presetChip: {
+    backgroundColor: '#1A1F35',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#2D3748',
   },
-  chip: {
-    marginBottom: 8,
+  presetChipText: {
+    color: '#FFFFFF',
+    fontSize: 14,
   },
-  input: {
-    marginBottom: 16,
+  inputCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginBottom: 20,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  button: {
-    paddingVertical: 4,
+  textInput: {
+    backgroundColor: 'transparent',
+    minHeight: 120,
+  },
+  textInputContent: {
+    color: '#1F2937',
+    fontSize: 16,
+  },
+  askButton: {
+    backgroundColor: '#1A1F35',
+    borderRadius: 12,
+    height: 52,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  askButtonDisabled: {
+    opacity: 0.5,
+  },
+  askButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
   },
   loadingContainer: {
     alignItems: 'center',
-    padding: 20,
+    paddingVertical: 32,
   },
   loadingText: {
+    color: '#9CA3AF',
     marginTop: 12,
-    color: '#666',
-  },
-  answerCard: {
-    marginTop: 16,
-    elevation: 2,
-    backgroundColor: '#e3f2fd',
-  },
-  answerTitle: {
-    marginBottom: 12,
-    fontWeight: 'bold',
-    color: '#1976D2',
-  },
-  answerText: {
     fontSize: 14,
-    lineHeight: 22,
-    color: '#333',
+  },
+  responseCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    marginTop: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  responseTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 16,
+  },
+  responseText: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#374151',
+    marginBottom: 20,
+  },
+  feedbackContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  feedbackButton: {
+    flex: 1,
+    backgroundColor: '#00C896',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginHorizontal: 4,
+    alignItems: 'center',
+  },
+  feedbackButtonRed: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FF5A5F',
+  },
+  feedbackButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  feedbackButtonTextRed: {
+    color: '#FF5A5F',
   },
 });
 
 export default AskAIScreen;
-

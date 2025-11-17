@@ -9,18 +9,18 @@ const TrendingScreen = () => {
   const trendingQuestions = getTrendingQuestions();
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.content}>
-        <Text variant="headlineMedium" style={styles.title}>
-          Trending Answers
-        </Text>
-        <Text variant="bodyMedium" style={styles.subtitle}>
-          Top supported fitness answers from the community
-        </Text>
+    <View style={styles.container}>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.title}>Trending AI Answers</Text>
+        <Text style={styles.subtitle}>Top supported fitness answers from the community</Text>
 
         {trendingQuestions.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text variant="bodyLarge" style={styles.emptyText}>
+            <Text style={styles.emptyText}>
               No questions yet. Ask a question to get started!
             </Text>
           </View>
@@ -38,38 +38,45 @@ const TrendingScreen = () => {
             />
           ))
         )}
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#0A0F23',
   },
-  content: {
-    padding: 16,
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
   },
   title: {
-    marginBottom: 8,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#2196F3',
+    color: '#FFFFFF',
+    marginBottom: 8,
   },
   subtitle: {
+    fontSize: 16,
+    color: '#9CA3AF',
     marginBottom: 24,
-    color: '#666',
   },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 40,
+    paddingVertical: 60,
   },
   emptyText: {
     textAlign: 'center',
-    color: '#999',
+    color: '#9CA3AF',
+    fontSize: 16,
   },
 });
 
 export default TrendingScreen;
-

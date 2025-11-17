@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, Card, Switch, List } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Switch } from 'react-native';
+import { Text } from 'react-native-paper';
 import { useApp } from '../context/AppContext';
 
 const SettingsScreen = () => {
@@ -12,97 +12,145 @@ const SettingsScreen = () => {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.content}>
-        <Text variant="headlineMedium" style={styles.title}>
-          Settings
-        </Text>
+    <View style={styles.container}>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.title}>Settings</Text>
 
-        <Card style={styles.card}>
-          <Card.Content>
-            <List.Item
-              title="Notifications"
-              description="Receive push notifications"
-              left={(props) => <List.Icon {...props} icon="bell" />}
-              right={() => (
-                <Switch
-                  value={settings.notifications}
-                  onValueChange={(value) => handleToggle('notifications', value)}
-                />
-              )}
+        <View style={styles.settingsCard}>
+          <View style={styles.settingItem}>
+            <View style={styles.settingLeft}>
+              <Text style={styles.settingTitle}>Notifications</Text>
+              <Text style={styles.settingDescription}>Receive push notifications</Text>
+            </View>
+            <Switch
+              value={settings.notifications}
+              onValueChange={(value) => handleToggle('notifications', value)}
+              trackColor={{ false: '#374151', true: '#00C896' }}
+              thumbColor="#FFFFFF"
             />
-            <List.Item
-              title="Dark Mode"
-              description="Enable dark theme"
-              left={(props) => <List.Icon {...props} icon="theme-light-dark" />}
-              right={() => (
-                <Switch
-                  value={settings.darkMode}
-                  onValueChange={(value) => handleToggle('darkMode', value)}
-                />
-              )}
-            />
-            <List.Item
-              title="Privacy"
-              description="Keep your data private"
-              left={(props) => <List.Icon {...props} icon="shield-lock" />}
-              right={() => (
-                <Switch
-                  value={settings.privacy}
-                  onValueChange={(value) => handleToggle('privacy', value)}
-                />
-              )}
-            />
-          </Card.Content>
-        </Card>
+          </View>
 
-        <Card style={styles.infoCard}>
-          <Card.Content>
-            <Text variant="titleMedium" style={styles.infoTitle}>
-              App Information
-            </Text>
-            <Text variant="bodySmall" style={styles.infoText}>
-              Version: 1.0.0
-            </Text>
-            <Text variant="bodySmall" style={styles.infoText}>
-              FitSense - AI Fitness Companion
-            </Text>
-          </Card.Content>
-        </Card>
-      </View>
-    </ScrollView>
+          <View style={styles.settingDivider} />
+
+          <View style={styles.settingItem}>
+            <View style={styles.settingLeft}>
+              <Text style={styles.settingTitle}>Dark Mode</Text>
+              <Text style={styles.settingDescription}>Enable dark theme</Text>
+            </View>
+            <Switch
+              value={settings.darkMode}
+              onValueChange={(value) => handleToggle('darkMode', value)}
+              trackColor={{ false: '#374151', true: '#00C896' }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+
+          <View style={styles.settingDivider} />
+
+          <View style={styles.settingItem}>
+            <View style={styles.settingLeft}>
+              <Text style={styles.settingTitle}>Privacy</Text>
+              <Text style={styles.settingDescription}>Keep your data private</Text>
+            </View>
+            <Switch
+              value={settings.privacy}
+              onValueChange={(value) => handleToggle('privacy', value)}
+              trackColor={{ false: '#374151', true: '#00C896' }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+        </View>
+
+        <View style={styles.infoCard}>
+          <Text style={styles.infoTitle}>App Information</Text>
+          <Text style={styles.infoText}>Version: 1.0.0</Text>
+          <Text style={styles.infoText}>FitSense - AI Fitness Companion</Text>
+        </View>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#0A0F23',
   },
-  content: {
-    padding: 16,
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
   },
   title: {
-    marginBottom: 24,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#2196F3',
+    color: '#FFFFFF',
+    marginBottom: 24,
   },
-  card: {
-    marginBottom: 16,
-    elevation: 2,
+  settingsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  settingItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+  },
+  settingLeft: {
+    flex: 1,
+    marginRight: 16,
+  },
+  settingTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  settingDescription: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  settingDivider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginLeft: 20,
+    marginRight: 20,
   },
   infoCard: {
-    elevation: 2,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   infoTitle: {
-    marginBottom: 12,
+    fontSize: 18,
     fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 12,
   },
   infoText: {
-    color: '#666',
+    fontSize: 14,
+    color: '#6B7280',
     marginBottom: 4,
   },
 });
 
 export default SettingsScreen;
-

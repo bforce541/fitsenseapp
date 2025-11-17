@@ -19,15 +19,23 @@ const MainTabs = () => {
   return (
     <Tab.Navigator
       screenOptions={{
-        headerStyle: {
-          backgroundColor: '#2196F3',
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: '#0A0F23',
+          borderTopWidth: 0,
+          height: 70,
+          paddingBottom: 10,
+          paddingTop: 10,
         },
-        headerTintColor: '#fff',
-        headerTitleStyle: {
-          fontWeight: 'bold',
+        tabBarActiveTintColor: '#00C896',
+        tabBarInactiveTintColor: '#6B7280',
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
         },
-        tabBarActiveTintColor: '#2196F3',
-        tabBarInactiveTintColor: '#666',
+        tabBarIconStyle: {
+          marginTop: 4,
+        },
       }}
     >
       <Tab.Screen
@@ -36,7 +44,7 @@ const MainTabs = () => {
         options={{
           title: 'Ask AI',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="robot" size={size} color={color} />
+            <MaterialCommunityIcons name="robot" size={24} color={color} />
           ),
         }}
       />
@@ -46,7 +54,7 @@ const MainTabs = () => {
         options={{
           title: 'Trending',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="trending-up" size={size} color={color} />
+            <MaterialCommunityIcons name="trending-up" size={24} color={color} />
           ),
         }}
       />
@@ -56,7 +64,7 @@ const MainTabs = () => {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="account" size={size} color={color} />
+            <MaterialCommunityIcons name="account" size={24} color={color} />
           ),
         }}
       />
@@ -66,7 +74,7 @@ const MainTabs = () => {
         options={{
           title: 'Settings',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="cog" size={size} color={color} />
+            <MaterialCommunityIcons name="cog" size={24} color={color} />
           ),
         }}
       />
@@ -93,7 +101,7 @@ const AppNavigator = () => {
 const AppContent = () => {
   return (
     <>
-      <StatusBar style="auto" />
+      <StatusBar style="light" />
       <AppNavigator />
     </>
   );
@@ -108,4 +116,3 @@ export default function App() {
     </PaperProvider>
   );
 }
-

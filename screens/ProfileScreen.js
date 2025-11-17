@@ -1,131 +1,170 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, Card, Avatar } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { Text } from 'react-native-paper';
 import { useApp } from '../context/AppContext';
 
 const ProfileScreen = () => {
   const { user, isGuest, questionsAsked, supportsGiven } = useApp();
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.content}>
+    <View style={styles.container}>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
-          <Avatar.Text
-            size={80}
-            label={isGuest ? 'G' : user?.email?.charAt(0).toUpperCase() || 'U'}
-            style={styles.avatar}
-          />
-          <Text variant="headlineMedium" style={styles.name}>
+          <View style={styles.avatarContainer}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {isGuest ? 'G' : user?.email?.charAt(0).toUpperCase() || 'U'}
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.username}>
             {isGuest ? 'Guest User' : user?.email || 'User'}
           </Text>
           {isGuest && (
-            <Text variant="bodySmall" style={styles.guestLabel}>
-              Guest Mode
-            </Text>
+            <Text style={styles.guestLabel}>Guest Mode</Text>
           )}
         </View>
 
-        <Card style={styles.statsCard}>
-          <Card.Content>
-            <Text variant="titleLarge" style={styles.statsTitle}>
-              Your Stats
-            </Text>
-            <View style={styles.statRow}>
-              <View style={styles.statItem}>
-                <Text variant="displaySmall" style={styles.statNumber}>
-                  {questionsAsked}
-                </Text>
-                <Text variant="bodyMedium" style={styles.statLabel}>
-                  Questions Asked
-                </Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text variant="displaySmall" style={styles.statNumber}>
-                  {supportsGiven}
-                </Text>
-                <Text variant="bodyMedium" style={styles.statLabel}>
-                  Supports Given
-                </Text>
-              </View>
-            </View>
-          </Card.Content>
-        </Card>
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>{questionsAsked}</Text>
+            <Text style={styles.statLabel}>Questions Asked</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>{supportsGiven}</Text>
+            <Text style={styles.statLabel}>Supports Given</Text>
+          </View>
+        </View>
 
-        <Card style={styles.infoCard}>
-          <Card.Content>
-            <Text variant="titleMedium" style={styles.infoTitle}>
-              About FitSense
-            </Text>
-            <Text variant="bodyMedium" style={styles.infoText}>
-              FitSense helps you get instant AI-powered answers to your fitness and health questions. Ask questions, get expert advice, and support helpful answers from the community.
-            </Text>
-          </Card.Content>
-        </Card>
-      </View>
-    </ScrollView>
+        <View style={styles.actionsContainer}>
+          <TouchableOpacity style={styles.actionButton}>
+            <Text style={styles.actionButtonText}>Edit Profile</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.logoutButton}>
+            <Text style={styles.logoutButtonText}>Log Out</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#0A0F23',
   },
-  content: {
-    padding: 16,
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 32,
     paddingTop: 20,
   },
-  avatar: {
-    backgroundColor: '#2196F3',
+  avatarContainer: {
     marginBottom: 16,
   },
-  name: {
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#00C896',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#00C896',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  avatarText: {
+    fontSize: 42,
     fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  username: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   guestLabel: {
-    color: '#666',
+    fontSize: 14,
+    color: '#9CA3AF',
     fontStyle: 'italic',
   },
-  statsCard: {
-    marginBottom: 16,
-    elevation: 2,
-  },
-  statsTitle: {
-    marginBottom: 20,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  statRow: {
+  statsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
+    marginBottom: 32,
+    gap: 16,
   },
-  statItem: {
+  statCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   statNumber: {
-    color: '#2196F3',
+    fontSize: 36,
     fontWeight: 'bold',
+    color: '#1F2937',
     marginBottom: 8,
   },
   statLabel: {
-    color: '#666',
+    fontSize: 14,
+    color: '#6B7280',
     textAlign: 'center',
   },
-  infoCard: {
-    elevation: 2,
+  actionsContainer: {
+    gap: 12,
   },
-  infoTitle: {
-    marginBottom: 12,
-    fontWeight: 'bold',
+  actionButton: {
+    backgroundColor: '#00C896',
+    borderRadius: 12,
+    height: 52,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#00C896',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  infoText: {
-    color: '#666',
-    lineHeight: 22,
+  actionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  logoutButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    height: 52,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FF5A5F',
+  },
+  logoutButtonText: {
+    color: '#FF5A5F',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 
