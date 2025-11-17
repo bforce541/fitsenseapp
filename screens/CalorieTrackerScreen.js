@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Platform } from 'react-native';
 import { Text, TextInput, Button } from 'react-native-paper';
 import { useApp } from '../context/AppContext';
+import { supabase } from '../utils/supabase';
 import { LineChart } from 'react-native-chart-kit';
 
 const screenWidth = Dimensions.get('window').width;
@@ -14,6 +15,7 @@ const CalorieTrackerScreen = () => {
   const [viewMode, setViewMode] = useState('day'); // 'day', 'month', 'year'
   const [monthlyData, setMonthlyData] = useState([]);
   const [yearlyData, setYearlyData] = useState([]);
+  const subscriptionRef = useRef(null);
 
   useEffect(() => {
     if (isGuest || !user?.id) {
@@ -27,6 +29,69 @@ const CalorieTrackerScreen = () => {
       loadYearlyData();
     }
   }, [selectedDate, viewMode, user?.id, isGuest]);
+
+  // Set up real-time subscription for calorie entries
+  useEffect(() => {
+    if (isGuest || !user?.id) {
+      return;
+    }
+
+    let channel;
+
+    try {
+      // Create a channel for real-time updates
+      channel = supabase
+        .channel(`calorie-entries-changes-${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*', // Listen to INSERT, UPDATE, and DELETE
+            schema: 'public',
+            table: 'calorie_entries',
+            filter: `user_id=eq.${user.id}`, // Only listen to changes for current user
+          },
+          (payload) => {
+            console.log('Calorie entry changed:', payload.eventType, payload.new || payload.old);
+            
+            // Reload data based on current view mode
+            // For day view, always reload (might be viewing a different date)
+            // For month/year views, reload to update charts
+            if (viewMode === 'day') {
+              loadTodayCalories();
+            } else if (viewMode === 'month') {
+              loadMonthlyData();
+            } else if (viewMode === 'year') {
+              loadYearlyData();
+            }
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Real-time subscription active for calorie entries');
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error('❌ Real-time subscription error');
+          } else {
+            console.log('Real-time subscription status:', status);
+          }
+        });
+
+      subscriptionRef.current = channel;
+    } catch (error) {
+      console.error('Error setting up real-time subscription:', error);
+    }
+
+    // Cleanup subscription on unmount or when user changes
+    return () => {
+      if (subscriptionRef.current) {
+        try {
+          supabase.removeChannel(subscriptionRef.current);
+          subscriptionRef.current = null;
+        } catch (error) {
+          console.error('Error removing subscription:', error);
+        }
+      }
+    };
+  }, [user?.id, isGuest, viewMode, selectedDate]);
 
   const loadTodayCalories = async () => {
     if (isGuest || !user?.id) {
