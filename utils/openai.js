@@ -1,6 +1,6 @@
 import axios from 'axios';
+import { OPENAI_API_KEY } from '@env';
 
-const OPENAI_API_KEY = 'YOUR_OPENAI_API_KEY'; // Replace with your actual API key
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
 export const askOpenAI = async (question) => {
@@ -27,11 +27,11 @@ export const askOpenAI = async (question) => {
     );
 
     const answer = response.data.choices[0]?.message?.content || 'No response received.';
-    
+
     // Trim to approximately 200 words
     const words = answer.split(' ');
     const trimmedAnswer = words.slice(0, 200).join(' ');
-    
+
     return trimmedAnswer;
   } catch (error) {
     console.error('OpenAI API Error:', error.response?.data || error.message);

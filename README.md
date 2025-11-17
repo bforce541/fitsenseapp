@@ -76,20 +76,37 @@ FitSenseApp/
 - Expo
 - React Navigation (Stack & Bottom Tabs)
 - React Native Paper (UI components)
-- AsyncStorage (local data persistence)
+- Supabase (PostgreSQL database with real-time sync)
+- AsyncStorage (local settings storage)
 - Axios (API calls)
 - OpenAI GPT-3.5 API
 
+## Database Setup
+
+This app uses **Supabase** for cloud database storage. Questions, votes, and user stats are synced across all users.
+
+**Quick Setup:**
+1. Create a free account at [supabase.com](https://supabase.com)
+2. Create a new project
+3. Run the SQL schema from `supabase-schema.sql` in Supabase SQL Editor
+4. Get your project URL and anon key from Settings → API
+5. Add them to your `.env` file
+
+See `SUPABASE_SETUP.md` for detailed instructions.
+
 ## Notes
 
-- All data is stored locally using AsyncStorage
-- Guest users can use all features
+- Questions and votes are stored in Supabase (shared across all users)
+- Settings are stored locally using AsyncStorage
+- Guest users can use all features (data stored locally for guests)
+- Logged-in users have data synced to Supabase
 - Vote tracking prevents multiple votes per user per question
 - AI responses are limited to 200 words
+- Real-time updates when new questions are added
 
 ## Next Steps
 
-- 🔑 Add your OpenAI API key in `utils/openai.js`
+- 🔑 Add your OpenAI API key and Supabase credentials to `.env`
 - 🧠 Customize preset questions in `screens/AskAIScreen.js`
 - 📈 Enhance vote tracking and analytics
 - ⚙️ Implement dark mode theme
