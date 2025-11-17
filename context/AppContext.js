@@ -90,17 +90,35 @@ export const AppProvider = ({ children }) => {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut().catch(() => { });
-    setUser(null);
-    setIsGuest(false);
+    try {
+      console.log('🔄 Starting logout process...');
 
-    // Reset fully for demo
-    setQuestionsAsked(0);
-    setSupportsGiven(0);
-    setVotedQuestions({});
-    await AsyncStorage.removeItem("user");
-    await AsyncStorage.removeItem("isGuest");
-    await AsyncStorage.removeItem("local_stats");
+      // Clear all user state FIRST (synchronous) - this triggers navigation
+      setUser(null);
+      setIsGuest(false);
+
+      // Reset fully for demo
+      setQuestionsAsked(0);
+      setSupportsGiven(0);
+      setVotedQuestions({});
+      setQuestions([]);
+
+      console.log('✅ User state cleared - user:', null, 'isGuest:', false);
+
+      // Then do async cleanup (don't wait for these)
+      supabase.auth.signOut().catch(() => { });
+      AsyncStorage.removeItem("user").catch(() => { });
+      AsyncStorage.removeItem("isGuest").catch(() => { });
+      AsyncStorage.removeItem("local_stats").catch(() => { });
+
+      console.log('✅ Logout complete - should navigate to login screen');
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Still clear state even if there's an error
+      setUser(null);
+      setIsGuest(false);
+      throw error;
+    }
   };
 
   // -----------------------------------------
@@ -259,6 +277,148 @@ export const AppProvider = ({ children }) => {
     return [...questions].sort((a, b) => b.supports - a.supports).slice(0, 10);
   };
 
+  // -----------------------------------------
+  // CALORIE TRACKER FUNCTIONS
+  // -----------------------------------------
+  const addCalorieEntry = async (date, calories) => {
+    try {
+      if (isGuest || !user?.id) {
+        throw new Error('Must be logged in to track calories');
+      }
+
+      // Check if entry exists for this date
+      const { data: existingData, error: checkError } = await supabase
+        .from(CALORIE_TABLE)
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('date', date)
+        .maybeSingle();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        throw checkError;
+      }
+
+      let result;
+      if (existingData && existingData.id) {
+        // Update existing entry
+        const { data, error } = await supabase
+          .from(CALORIE_TABLE)
+          .update({ calories: calories, updated_at: new Date().toISOString() })
+          .eq('id', existingData.id)
+          .select()
+          .single();
+        if (error) throw error;
+        result = data;
+      } else {
+        // Insert new entry
+        const { data, error } = await supabase
+          .from(CALORIE_TABLE)
+          .insert({ user_id: user.id, date: date, calories: calories })
+          .select()
+          .single();
+        if (error) throw error;
+        result = data;
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error adding calorie entry:', error);
+      throw error;
+    }
+  };
+
+  const getCalorieEntries = async (startDate, endDate) => {
+    try {
+      if (isGuest || !user?.id) {
+        return [];
+      }
+
+      const { data, error } = await supabase
+        .from(CALORIE_TABLE)
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error getting calorie entries:', error);
+      return [];
+    }
+  };
+
+  const getMonthlyCalories = async () => {
+    try {
+      if (isGuest || !user?.id) {
+        return [];
+      }
+
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+      const endDate = now.toISOString().split('T')[0];
+
+      const { data, error } = await supabase
+        .from(CALORIE_TABLE)
+        .select('date, calories')
+        .eq('user_id', user.id)
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error getting monthly calories:', error);
+      return [];
+    }
+  };
+
+  const getYearlyCalories = async () => {
+    try {
+      if (isGuest || !user?.id) {
+        return [];
+      }
+
+      const now = new Date();
+      const yearStart = new Date(now.getFullYear(), 0, 1);
+      const startDate = yearStart.toISOString().split('T')[0];
+      const endDate = now.toISOString().split('T')[0];
+
+      const { data, error } = await supabase
+        .from(CALORIE_TABLE)
+        .select('date, calories')
+        .eq('user_id', user.id)
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: true });
+
+      if (error) throw error;
+
+      // Group by month and calculate average
+      const monthlyData = {};
+      (data || []).forEach(entry => {
+        const month = new Date(entry.date).getMonth();
+        if (!monthlyData[month]) {
+          monthlyData[month] = { total: 0, count: 0 };
+        }
+        monthlyData[month].total += entry.calories || 0;
+        monthlyData[month].count += 1;
+      });
+
+      return Object.keys(monthlyData).map(month => ({
+        month: parseInt(month),
+        avgCalories: Math.round(monthlyData[month].total / monthlyData[month].count),
+      }));
+    } catch (error) {
+      console.error('Error getting yearly calories:', error);
+      return [];
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -268,6 +428,7 @@ export const AppProvider = ({ children }) => {
         supportsGiven,
         questions,
         votedQuestions,
+        settings,
         loading,
         signOut,
         loginAsGuest,
@@ -277,6 +438,10 @@ export const AppProvider = ({ children }) => {
         getTrendingQuestions,
         incrementQuestionsAsked,
         incrementSupportsGiven,
+        addCalorieEntry,
+        getCalorieEntries,
+        getMonthlyCalories,
+        getYearlyCalories,
       }}
     >
       {children}

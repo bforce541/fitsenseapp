@@ -6,8 +6,15 @@ import { useApp } from '../context/AppContext';
 const SettingsScreen = () => {
   const { settings, updateSettings } = useApp();
 
+  // Safety check - ensure settings exists
+  const safeSettings = settings || {
+    notifications: true,
+    darkMode: false,
+    privacy: true,
+  };
+
   const handleToggle = (key, value) => {
-    const newSettings = { ...settings, [key]: value };
+    const newSettings = { ...safeSettings, [key]: value };
     updateSettings(newSettings);
   };
 
@@ -27,7 +34,7 @@ const SettingsScreen = () => {
               <Text style={styles.settingDescription}>Receive push notifications</Text>
             </View>
             <Switch
-              value={settings.notifications}
+              value={safeSettings.notifications}
               onValueChange={(value) => handleToggle('notifications', value)}
               trackColor={{ false: '#374151', true: '#00C896' }}
               thumbColor="#FFFFFF"
@@ -42,7 +49,7 @@ const SettingsScreen = () => {
               <Text style={styles.settingDescription}>Enable dark theme</Text>
             </View>
             <Switch
-              value={settings.darkMode}
+              value={safeSettings.darkMode}
               onValueChange={(value) => handleToggle('darkMode', value)}
               trackColor={{ false: '#374151', true: '#00C896' }}
               thumbColor="#FFFFFF"
@@ -57,7 +64,7 @@ const SettingsScreen = () => {
               <Text style={styles.settingDescription}>Keep your data private</Text>
             </View>
             <Switch
-              value={settings.privacy}
+              value={safeSettings.privacy}
               onValueChange={(value) => handleToggle('privacy', value)}
               trackColor={{ false: '#374151', true: '#00C896' }}
               thumbColor="#FFFFFF"

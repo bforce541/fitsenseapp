@@ -25,8 +25,11 @@ const ProfileScreen = () => {
           style: 'destructive',
           onPress: async () => {
             try {
+              console.log('🔄 Starting logout...');
               await signOut();
+              console.log('✅ Logout completed - should navigate to login');
             } catch (error) {
+              console.error('❌ Logout error:', error);
               Alert.alert('Error', 'Failed to log out. Please try again.');
             }
           },

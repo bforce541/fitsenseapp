@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, CommonActions } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { PaperProvider } from 'react-native-paper';
 import { StatusBar } from 'expo-status-bar';
@@ -95,11 +95,36 @@ const MainTabs = () => {
 
 const AppNavigator = () => {
   const { user, isGuest, loading } = useApp();
+  const navigationRef = React.useRef(null);
+
+  // Calculate auth state
+  const isAuthenticated = !!(user || isGuest);
+  
+  // Reset navigation when auth state changes
+  React.useEffect(() => {
+    if (!loading && navigationRef.current) {
+      if (!isAuthenticated) {
+        // User logged out - reset to login screen
+        console.log('🔄 User logged out, resetting navigation to Login');
+        navigationRef.current.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+          })
+        );
+      }
+    }
+  }, [isAuthenticated, loading]);
+
+  // Don't render until loading is complete
+  if (loading) {
+    return null;
+  }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {!user && !isGuest ? (
+        {!isAuthenticated ? (
           <Stack.Screen name="Login" component={LoginScreen} />
         ) : (
           <Stack.Screen name="Main" component={MainTabs} />
