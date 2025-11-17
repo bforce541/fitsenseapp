@@ -2,11 +2,14 @@ import React, { useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { Text } from 'react-native-paper';
 import { useApp } from '../context/AppContext';
-import { useFocusEffect } from '@react-navigation/native';
-import { useCallback } from 'react';
 
 const ProfileScreen = () => {
-  const { user, isGuest, questionsAsked, supportsGiven, loadUserStats, signOut } = useApp();
+  const { user, isGuest, questionsAsked, supportsGiven, signOut } = useApp();
+
+  // Log stats for debugging
+  useEffect(() => {
+    console.log('📊 Profile Stats Updated:', { questionsAsked, supportsGiven });
+  }, [questionsAsked, supportsGiven]);
 
   const handleLogout = async () => {
     Alert.alert(
@@ -32,22 +35,8 @@ const ProfileScreen = () => {
     );
   };
 
-  // Reload user stats when profile screen is focused (viewed)
-  useFocusEffect(
-    useCallback(() => {
-      if (!isGuest && user?.id && loadUserStats) {
-        loadUserStats(user.id);
-      }
-    }, [user?.id, isGuest, loadUserStats])
-  );
-
-  // Also reload on mount
-  useEffect(() => {
-    if (!isGuest && user?.id && loadUserStats) {
-      loadUserStats(user.id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, isGuest]);
+  // Note: We don't reload stats on focus for demo - use local state only
+  // Stats update immediately via context state, no need to reload from storage
 
   return (
     <View style={styles.container}>

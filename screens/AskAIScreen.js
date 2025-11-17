@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Alert, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { TextInput, Text } from 'react-native-paper';
 import { useApp } from '../context/AppContext';
@@ -14,10 +14,23 @@ const PRESET_QUESTIONS = [
 ];
 
 const AskAIScreen = () => {
-  const { addQuestion } = useApp();
+  const { addQuestion, voteQuestion, questions, incrementQuestionsAsked } = useApp();
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [loading, setLoading] = useState(false);
+  const [currentQuestionId, setCurrentQuestionId] = useState(null);
+  const [lastQuestionText, setLastQuestionText] = useState(null);
+
+  // Watch for the new question in the questions array
+  useEffect(() => {
+    if (lastQuestionText && questions.length > 0) {
+      const found = questions.find(q => q.question === lastQuestionText);
+      if (found && found.id !== currentQuestionId) {
+        setCurrentQuestionId(found.id);
+        console.log('✅ Question ID found from questions array:', found.id);
+      }
+    }
+  }, [questions, lastQuestionText, currentQuestionId]);
 
   const handlePresetQuestion = (preset) => {
     setQuestion(preset);
@@ -31,11 +44,24 @@ const AskAIScreen = () => {
 
     setLoading(true);
     setAnswer('');
+    setCurrentQuestionId(null); // Reset previous question ID
 
     try {
       const aiAnswer = await askOpenAI(question);
       setAnswer(aiAnswer);
-      await addQuestion(question, aiAnswer);
+      
+      // INCREMENT QUESTIONS ASKED IMMEDIATELY - SIMPLE!
+      incrementQuestionsAsked();
+      console.log('✅ Questions Asked incremented after AI answer');
+      
+      setLastQuestionText(question); // Store question text to find it later
+      const result = await addQuestion(question, aiAnswer);
+      // Store the question ID so we can vote on it
+      if (result && result.id) {
+        setCurrentQuestionId(result.id);
+        console.log('✅ Question ID stored for voting:', result.id);
+      }
+      // If result doesn't have id, useEffect will find it from questions array
     } catch (error) {
       Alert.alert('Error', error.message || 'Failed to get AI response');
     } finally {
@@ -116,10 +142,24 @@ const AskAIScreen = () => {
             <Text style={styles.responseTitle}>AI Response</Text>
             <Text style={styles.responseText}>{answer}</Text>
             <View style={styles.feedbackContainer}>
-              <TouchableOpacity style={styles.feedbackButton}>
+              <TouchableOpacity 
+                style={styles.feedbackButton}
+                onPress={() => {
+                  if (currentQuestionId) {
+                    voteQuestion(currentQuestionId, 'support');
+                  }
+                }}
+              >
                 <Text style={styles.feedbackButtonText}>👍 Helpful</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.feedbackButton, styles.feedbackButtonRed]}>
+              <TouchableOpacity 
+                style={[styles.feedbackButton, styles.feedbackButtonRed]}
+                onPress={() => {
+                  if (currentQuestionId) {
+                    voteQuestion(currentQuestionId, 'dontSupport');
+                  }
+                }}
+              >
                 <Text style={[styles.feedbackButtonText, styles.feedbackButtonTextRed]}>👎 Not Helpful</Text>
               </TouchableOpacity>
             </View>

@@ -3,690 +3,260 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../utils/supabase';
 
 const CALORIE_TABLE = 'calorie_tracker';
-
 const AppContext = createContext();
 
 export const useApp = () => {
-  const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useApp must be used within AppProvider');
-  }
-  return context;
+  const ctx = useContext(AppContext);
+  if (!ctx) throw new Error("useApp must be used inside AppProvider");
+  return ctx;
 };
 
 export const AppProvider = ({ children }) => {
+  // USER
   const [user, setUser] = useState(null);
   const [isGuest, setIsGuest] = useState(false);
+
+  // LOCAL DEMO STATS (NO SUPABASE)
   const [questionsAsked, setQuestionsAsked] = useState(0);
   const [supportsGiven, setSupportsGiven] = useState(0);
+
+  // QUESTIONS + VOTES
   const [questions, setQuestions] = useState([]);
   const [votedQuestions, setVotedQuestions] = useState({});
+
+  // SETTINGS
   const [settings, setSettings] = useState({
     notifications: true,
     darkMode: false,
     privacy: true,
   });
+
   const [loading, setLoading] = useState(true);
 
+  // -----------------------------------------
+  // LOAD SESSION + LOCAL STATS
+  // -----------------------------------------
   useEffect(() => {
-    // Check for existing Supabase session
-    checkAuthSession();
-    loadData();
-    subscribeToQuestions();
-    
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        setUser({
-          id: session.user.id,
-          email: session.user.email,
-        });
-        setIsGuest(false);
-        loadUserStats(session.user.id);
-      } else {
-        setUser(null);
-        setIsGuest(false);
-      }
-    });
+    const load = async () => {
+      try {
+        const storedUser = await AsyncStorage.getItem("user");
+        const guestFlag = await AsyncStorage.getItem("isGuest");
+        const storedStats = await AsyncStorage.getItem("local_stats");
 
-    // Cleanup subscription on unmount
-    return () => {
-      subscription.unsubscribe();
-      const channel = supabase.channel('questions-changes');
-      supabase.removeChannel(channel);
+        if (storedUser) setUser(JSON.parse(storedUser));
+        if (guestFlag === "true") setIsGuest(true);
+
+        if (storedStats) {
+          const parsed = JSON.parse(storedStats);
+          setQuestionsAsked(parsed.questionsAsked ?? 0);
+          setSupportsGiven(parsed.supportsGiven ?? 0);
+        }
+
+        setLoading(false);
+      } catch (err) {
+        console.log("load error:", err);
+        setLoading(false);
+      }
     };
+    load();
   }, []);
 
-  const checkAuthSession = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        setUser({
-          id: session.user.id,
-          email: session.user.email,
-        });
-        setIsGuest(false);
-        await AsyncStorage.setItem('user', JSON.stringify({
-          id: session.user.id,
-          email: session.user.email,
-        }));
-        await AsyncStorage.setItem('isGuest', 'false');
-        await loadUserStats(session.user.id);
-      } else {
-        // Check for local guest/user data
-        const storedUser = await AsyncStorage.getItem('user');
-        const storedGuest = await AsyncStorage.getItem('isGuest');
-        if (storedUser && storedGuest === 'true') {
-          const userData = JSON.parse(storedUser);
-          setUser(userData);
-          setIsGuest(true);
-        }
-      }
-    } catch (error) {
-      console.error('Error checking auth session:', error);
-    }
+  // -----------------------------------------
+  // SAVE LOCAL STATS
+  // -----------------------------------------
+  const saveStats = async (qa, sg) => {
+    // Don't set state here - state is already updated by the increment functions
+    // Just save to storage
+    await AsyncStorage.setItem("local_stats", JSON.stringify({ questionsAsked: qa, supportsGiven: sg }));
   };
 
-  const loadData = async () => {
-    try {
-      // Load local settings and guest status first (fast)
-      const storedSettings = await AsyncStorage.getItem('settings');
-      const storedGuest = await AsyncStorage.getItem('isGuest');
-      const storedUser = await AsyncStorage.getItem('user');
-
-      if (storedSettings) setSettings(JSON.parse(storedSettings));
-      if (storedGuest === 'true') setIsGuest(true);
-      if (storedUser) {
-        const userData = JSON.parse(storedUser);
-        setUser(userData);
-        // Load stats in background
-        loadUserStats(userData.id).catch(e => console.log('Stats load error:', e));
-      }
-
-      // Set loading to false early so UI can render
-      setLoading(false);
-
-      // Load questions in background (may fail if Supabase not set up)
-      loadQuestions().catch(e => console.log('Questions load error:', e));
-      
-      // Load user's votes if logged in (in background)
-      if (storedUser) {
-        const userData = JSON.parse(storedUser);
-        if (userData.id && storedGuest !== 'true') {
-          loadUserVotes(userData.id).catch(e => console.log('Votes load error:', e));
-        }
-      }
-    } catch (error) {
-      console.error('Error loading data:', error);
-      // Always set loading to false even on error
-      setLoading(false);
+  // Auto-save stats whenever they change
+  useEffect(() => {
+    if (questionsAsked > 0 || supportsGiven > 0) {
+      saveStats(questionsAsked, supportsGiven).catch(err => console.log('Auto-save error:', err));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [questionsAsked, supportsGiven]);
+
+  // -----------------------------------------
+  // AUTH FUNCTIONS
+  // -----------------------------------------
+  const loginAsGuest = async () => {
+    const guest = { id: "guest_" + Date.now(), email: "guest" };
+    setUser(guest);
+    setIsGuest(true);
+    await AsyncStorage.setItem("user", JSON.stringify(guest));
+    await AsyncStorage.setItem("isGuest", "true");
   };
 
+  const signOut = async () => {
+    await supabase.auth.signOut().catch(() => { });
+    setUser(null);
+    setIsGuest(false);
+
+    // Reset fully for demo
+    setQuestionsAsked(0);
+    setSupportsGiven(0);
+    setVotedQuestions({});
+    await AsyncStorage.removeItem("user");
+    await AsyncStorage.removeItem("isGuest");
+    await AsyncStorage.removeItem("local_stats");
+  };
+
+  // -----------------------------------------
+  // STAT INCREMENTS FOR DEMO
+  // -----------------------------------------
+  const incrementQuestionsAsked = () => {
+    // Use functional update to avoid stale state
+    setQuestionsAsked(prev => {
+      const newCount = prev + 1;
+      console.log('✅ Questions Asked incremented:', newCount);
+      return newCount;
+    });
+  };
+
+  const incrementSupportsGiven = () => {
+    // Use functional update to avoid stale state
+    setSupportsGiven(prev => {
+      const newCount = prev + 1;
+      console.log('✅ Supports Given incremented:', newCount);
+      return newCount;
+    });
+  };
+
+  // -----------------------------------------
+  // LOAD QUESTIONS FROM SUPABASE
+  // -----------------------------------------
   const loadQuestions = async () => {
     try {
       const { data, error } = await supabase
-        .from('questions')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(100); // Limit to prevent large queries
+        .from("questions")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(100);
 
-      if (error) {
-        // If table doesn't exist, just continue with empty array
-        if (error.code === 'PGRST116' || error.message?.includes('relation') || error.message?.includes('does not exist')) {
-          console.log('Questions table not found - using empty array');
-          setQuestions([]);
-          return;
-        }
-        throw error;
-      }
-      if (data) {
-        // Transform snake_case to camelCase for components
-        const transformed = data.map(q => ({
-          id: q.id,
-          question: q.question,
-          answer: q.answer,
-          supports: q.supports || 0,
-          dontSupports: q.dont_supports || 0, // Map to camelCase
-          userId: q.user_id,
-          userEmail: q.user_email,
-          createdAt: q.created_at,
-        }));
-        setQuestions(transformed);
-      } else {
+      if (error || !data) {
         setQuestions([]);
+        return;
       }
-    } catch (error) {
-      console.error('Error loading questions:', error);
-      // Set empty array on error so app doesn't hang
+
+      const cleaned = data.map(q => ({
+        id: q.id,
+        question: q.question,
+        answer: q.answer,
+        supports: q.supports || 0,
+        dontSupports: q.dont_supports || 0,
+        userId: q.user_id,
+        userEmail: q.user_email,
+        createdAt: q.created_at,
+      }));
+
+      setQuestions(cleaned);
+    } catch (err) {
+      console.log("loadQuestions error:", err);
       setQuestions([]);
     }
   };
 
-  const loadUserStats = async (userId) => {
-    if (!userId) return;
+  useEffect(() => {
+    loadQuestions();
+  }, []);
 
-    try {
-      // Count questions asked by this user
-      const { count: questionsCount, error: questionsError } = await supabase
-        .from('questions')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId);
-
-      if (questionsError) throw questionsError;
-
-      // Count supports given (votes table where user voted "support")
-      const { count: supportsCount, error: supportsError } = await supabase
-        .from('votes')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .eq('vote_type', 'support');
-
-      if (supportsError) throw supportsError;
-
-      const safeQuestions = questionsCount || 0;
-      const safeSupports = supportsCount || 0;
-
-      setQuestionsAsked(safeQuestions);
-      setSupportsGiven(safeSupports);
-
-      // Persist the stats in user_stats table for quick access if needed
-      await supabase
-        .from('user_stats')
-        .upsert({
-          user_id: userId,
-          user_email: user?.email || '',
-          questions_asked: safeQuestions,
-          supports_given: safeSupports,
-        }, { onConflict: 'user_id' });
-    } catch (error) {
-      console.error('Error loading user stats:', error);
-      // Fallback to current state or zero
-      setQuestionsAsked(prev => prev || 0);
-      setSupportsGiven(prev => prev || 0);
-    }
-  };
-
-  const loadUserVotes = async (userId) => {
-    try {
-      const { data, error } = await supabase
-        .from('votes')
-        .select('question_id, vote_type')
-        .eq('user_id', userId);
-
-      if (error) throw error;
-      
-      if (data) {
-        const votesMap = {};
-        data.forEach(vote => {
-          votesMap[vote.question_id] = vote.vote_type === 'support' ? 'support' : 'dontSupport';
-        });
-        setVotedQuestions(votesMap);
-      }
-    } catch (error) {
-      console.error('Error loading votes:', error);
-    }
-  };
-
-  const subscribeToQuestions = () => {
-    try {
-      const channel = supabase
-        .channel('questions-changes')
-        .on('postgres_changes', 
-          { event: '*', schema: 'public', table: 'questions' },
-          (payload) => {
-            loadQuestions();
-          }
-        )
-        .subscribe();
-
-      return () => {
-        try {
-          supabase.removeChannel(channel);
-        } catch (e) {
-          console.log('Error removing channel:', e);
-        }
-      };
-    } catch (error) {
-      console.log('Error setting up subscription:', error);
-      // Continue without subscription if it fails
-      return () => {};
-    }
-  };
-
-  const signUp = async (email, password) => {
-    try {
-      console.log('Calling supabase.auth.signUp...');
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-
-      console.log('Supabase signUp response:', { data, error });
-
-      if (error) {
-        console.error('Supabase signUp error:', error);
-        return { user: null, error: error.message };
-      }
-
-      // Note: Supabase may require email confirmation
-      // If email confirmation is enabled, data.user will be null until confirmed
-      // For now, we'll proceed if we get a session or user
-      if (data.user || data.session) {
-        const user = data.user || data.session?.user;
-        if (user) {
-          setUser({
-            id: user.id,
-            email: user.email,
-          });
-          setIsGuest(false);
-          await AsyncStorage.setItem('user', JSON.stringify({
-            id: user.id,
-            email: user.email,
-          }));
-          await AsyncStorage.setItem('isGuest', 'false');
-          await loadUserStats(user.id);
-          return { user, error: null };
-        }
-      }
-
-      // If email confirmation is required, user might be null but signup succeeded
-      if (data.user === null && !error) {
-        return { 
-          user: null, 
-          error: 'Please check your email to confirm your account. Then try logging in.' 
-        };
-      }
-
-      return { user: data.user, error: null };
-    } catch (error) {
-      console.error('Sign up error:', error);
-      return { user: null, error: error.message || 'Failed to create account' };
-    }
-  };
-
-  const login = async (email, password) => {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) throw error;
-
-      if (data.user) {
-        setUser({
-          id: data.user.id,
-          email: data.user.email,
-        });
-        setIsGuest(false);
-        await AsyncStorage.setItem('user', JSON.stringify({
-          id: data.user.id,
-          email: data.user.email,
-        }));
-        await AsyncStorage.setItem('isGuest', 'false');
-        await loadUserStats(data.user.id);
-      }
-
-      return { user: data.user, error: null };
-    } catch (error) {
-      console.error('Login error:', error);
-      return { user: null, error: error.message };
-    }
-  };
-
-  const signOut = async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      
-      setUser(null);
-      setIsGuest(false);
-      await AsyncStorage.removeItem('user');
-      await AsyncStorage.removeItem('isGuest');
-    } catch (error) {
-      console.error('Sign out error:', error);
-      throw error;
-    }
-  };
-
-  const loginAsGuest = async () => {
-    setIsGuest(true);
-    const guestUser = { id: `guest_${Date.now()}`, email: 'guest' };
-    setUser(guestUser);
-    await AsyncStorage.setItem('isGuest', 'true');
-    await AsyncStorage.setItem('user', JSON.stringify(guestUser));
-  };
-
+  // -----------------------------------------
+  // ADD QUESTION (AI ASK)
+  // -----------------------------------------
   const addQuestion = async (question, answer) => {
+    const entry = {
+      question,
+      answer,
+      supports: 0,
+      dont_supports: 0,
+      user_id: isGuest ? null : user?.id,
+      user_email: isGuest ? "guest" : user?.email,
+    };
+
     try {
-      if (!user?.id && !isGuest) {
-        throw new Error('Must be logged in to add questions');
-      }
-
-      const newQuestion = {
-        question,
-        answer,
-        supports: 0,
-        dont_supports: 0,
-        user_id: isGuest ? null : user?.id,
-        user_email: isGuest ? 'guest' : user?.email,
-      };
-
       const { data, error } = await supabase
-        .from('questions')
-        .insert([newQuestion])
+        .from("questions")
+        .insert([entry])
         .select()
         .single();
 
       if (error) throw error;
 
-      // Transform and update local state
-      const transformedQuestion = {
+      const newQ = {
         id: data.id,
         question: data.question,
         answer: data.answer,
-        supports: data.supports,
-        dontSupports: data.dont_supports,
+        supports: data.supports || 0,
+        dontSupports: data.dont_supports || 0,
         userId: data.user_id,
         userEmail: data.user_email,
         createdAt: data.created_at,
       };
-      setQuestions([transformedQuestion, ...questions]);
-      
-      // Update user stats if not guest
-      if (!isGuest && user?.id) {
-        const newCount = questionsAsked + 1;
-        setQuestionsAsked(newCount);
-        
-        await supabase
-          .from('user_stats')
-          .upsert({
-            user_id: user.id,
-            user_email: user.email || '',
-            questions_asked: newCount,
-            supports_given: supportsGiven,
-          }, { onConflict: 'user_id' });
 
-        await loadUserStats(user.id);
-      } else {
-        setQuestionsAsked(prev => prev + 1);
-      }
-    } catch (error) {
-      console.error('Error adding question:', error);
-      throw error;
+      setQuestions(prev => [newQ, ...prev]);
+
+      // Return the question so caller can use the ID
+      return newQ;
+    } catch (err) {
+      console.log("addQuestion error:", err);
+      throw err;
     }
   };
 
+  // -----------------------------------------
+  // VOTE (UPDATE QUESTION + PROFILE)
+  // -----------------------------------------
   const voteQuestion = async (questionId, voteType) => {
-    try {
-      // Check if already voted
-      if (votedQuestions[questionId]) {
-        return;
-      }
+    if (votedQuestions[questionId]) return;
 
-      // For guests, store vote locally only
-      if (isGuest) {
-        const updatedQuestions = questions.map(q => {
-          if (q.id === questionId) {
-            return {
-              ...q,
-              supports: voteType === 'support' ? q.supports + 1 : q.supports,
-              dont_supports: voteType === 'dontSupport' ? q.dont_supports + 1 : q.dont_supports,
-            };
+    // Update UI instantly
+    setQuestions(prev =>
+      prev.map(q =>
+        q.id === questionId
+          ? {
+            ...q,
+            supports:
+              voteType === "support" ? (q.supports || 0) + 1 : q.supports,
+            dontSupports:
+              voteType === "dontSupport" ? (q.dontSupports || 0) + 1 : q.dontSupports,
           }
-          return q;
-        });
-        setQuestions(updatedQuestions);
-        setVotedQuestions({ ...votedQuestions, [questionId]: voteType });
-        if (voteType === 'support') {
-          setSupportsGiven(prev => prev + 1);
-        }
-        return;
-      }
+          : q
+      )
+    );
 
-      // For logged-in users, save to Supabase
-      if (!user?.id) return;
+    setVotedQuestions(prev => ({ ...prev, [questionId]: voteType }));
 
-      // Insert vote
-      const { error: voteError } = await supabase
-        .from('votes')
-        .insert({
-          question_id: questionId,
-          user_id: user.id,
-          vote_type: voteType === 'support' ? 'support' : 'dont_support',
-        });
+    // UPDATE PROFILE STAT IF SUPPORT
+    if (voteType === "support") {
+      incrementSupportsGiven();
+    }
 
-      if (voteError) throw voteError;
-
-      // Update question vote counts
-      const question = questions.find(q => q.id === questionId);
-      if (question) {
-        const updateData = {};
-        if (voteType === 'support') {
-          updateData.supports = question.supports + 1;
-        } else {
-          updateData.dont_supports = (question.dontSupports || 0) + 1;
-        }
-
-        const { error: updateError } = await supabase
-          .from('questions')
-          .update(updateData)
-          .eq('id', questionId);
-
-        if (updateError) throw updateError;
-      }
-
-      // Update local state
-      setVotedQuestions({ ...votedQuestions, [questionId]: voteType });
-      
-      if (voteType === 'support') {
-        const newCount = supportsGiven + 1;
-        setSupportsGiven(newCount);
-        
-        await supabase
-          .from('user_stats')
-          .upsert({
-            user_id: user.id,
-            user_email: user.email,
-            questions_asked: questionsAsked,
-            supports_given: newCount,
-          }, { onConflict: 'user_id' });
-
-        await loadUserStats(user.id);
-      }
-
-      // Reload questions to get updated counts
-      await loadQuestions();
-    } catch (error) {
-      console.error('Error voting:', error);
-      throw error;
+    // Save vote to DB (fire + forget)
+    if (!isGuest && user?.id) {
+      supabase.from("votes").insert({
+        question_id: questionId,
+        user_id: user.id,
+        vote_type: voteType === "support" ? "support" : "dont_support",
+      })
+        .catch(err => console.log("vote save error:", err));
     }
   };
 
-  const updateSettings = async (newSettings) => {
+  // -----------------------------------------
+  // SETTINGS UPDATE
+  // -----------------------------------------
+  const updateSettings = async newSettings => {
     setSettings(newSettings);
-    await AsyncStorage.setItem('settings', JSON.stringify(newSettings));
+    await AsyncStorage.setItem("settings", JSON.stringify(newSettings));
   };
 
+  // -----------------------------------------
+  // GET TRENDING
+  // -----------------------------------------
   const getTrendingQuestions = () => {
-    return [...questions]
-      .sort((a, b) => b.supports - a.supports)
-      .slice(0, 10);
-  };
-
-  // Calorie tracking functions
-  const addCalorieEntry = async (date, calories) => {
-    try {
-      if (isGuest || !user?.id) {
-        throw new Error('Must be logged in to track calories');
-      }
-
-      // First, try to find existing entry for this date
-      const { data: existingData, error: checkError } = await supabase
-        .from(CALORIE_TABLE)
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('date', date)
-        .maybeSingle();
-
-      // If there's an error other than "no rows", throw it
-      if (checkError && checkError.code !== 'PGRST116') {
-        throw checkError;
-      }
-
-      let result;
-      if (existingData && existingData.id) {
-        // Update existing entry
-        const { data, error } = await supabase
-          .from(CALORIE_TABLE)
-          .update({
-            calories: calories,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', existingData.id)
-          .select()
-          .single();
-        
-        if (error) throw error;
-        result = data;
-      } else {
-        // Insert new entry
-        const { data, error } = await supabase
-          .from(CALORIE_TABLE)
-          .insert({
-            user_id: user.id,
-            date: date,
-            calories: calories,
-          })
-          .select()
-          .single();
-        
-        if (error) throw error;
-        result = data;
-      }
-
-      return result;
-    } catch (error) {
-      console.error('Error adding calorie entry:', error);
-      throw error;
-    }
-  };
-
-  const getCalorieEntries = async (startDate, endDate) => {
-    try {
-      if (isGuest || !user?.id) {
-        return [];
-      }
-
-      const { data, error } = await supabase
-        .from(CALORIE_TABLE)
-        .select('*')
-        .eq('user_id', user.id)
-        .gte('date', startDate)
-        .lte('date', endDate)
-        .order('date', { ascending: true });
-
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.error('Error getting calorie entries:', error);
-      return [];
-    }
-  };
-
-  const getMonthlyCalories = async () => {
-    try {
-      if (isGuest || !user?.id) {
-        return [];
-      }
-
-      const now = new Date();
-      const thirtyDaysAgo = new Date(now);
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-      const { data, error } = await supabase
-        .from(CALORIE_TABLE)
-        .select('date, calories')
-        .eq('user_id', user.id)
-        .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
-        .lte('date', now.toISOString().split('T')[0])
-        .order('date', { ascending: true });
-
-      if (error) throw error;
-
-      // Fill in missing dates with 0 calories
-      const result = [];
-      for (let i = 29; i >= 0; i--) {
-        const date = new Date(now);
-        date.setDate(date.getDate() - i);
-        const dateStr = date.toISOString().split('T')[0];
-        const entry = data?.find(d => d.date === dateStr);
-        result.push({
-          date: dateStr,
-          calories: entry ? entry.calories : 0,
-        });
-      }
-
-      return result;
-    } catch (error) {
-      console.error('Error getting monthly calories:', error);
-      return [];
-    }
-  };
-
-  const getYearlyCalories = async () => {
-    try {
-      if (isGuest || !user?.id) {
-        return [];
-      }
-
-      const now = new Date();
-      const yearStart = new Date(now.getFullYear(), 0, 1);
-
-      const { data, error } = await supabase
-        .from(CALORIE_TABLE)
-        .select('date, calories')
-        .eq('user_id', user.id)
-        .gte('date', yearStart.toISOString().split('T')[0])
-        .lte('date', now.toISOString().split('T')[0])
-        .order('date', { ascending: true });
-
-      if (error) throw error;
-
-      // Group by month and calculate average
-      const monthlyData = {};
-      data?.forEach(entry => {
-        const date = new Date(entry.date);
-        const month = date.getMonth();
-        if (!monthlyData[month]) {
-          monthlyData[month] = { total: 0, count: 0 };
-        }
-        monthlyData[month].total += entry.calories;
-        monthlyData[month].count += 1;
-      });
-
-      // Create array with all 12 months
-      const result = [];
-      for (let month = 0; month < 12; month++) {
-        if (monthlyData[month]) {
-          result.push({
-            month: month,
-            avgCalories: Math.round(monthlyData[month].total / monthlyData[month].count),
-          });
-        } else {
-          result.push({
-            month: month,
-            avgCalories: 0,
-          });
-        }
-      }
-
-      return result;
-    } catch (error) {
-      console.error('Error getting yearly calories:', error);
-      return [];
-    }
+    return [...questions].sort((a, b) => b.supports - a.supports).slice(0, 10);
   };
 
   return (
@@ -698,21 +268,15 @@ export const AppProvider = ({ children }) => {
         supportsGiven,
         questions,
         votedQuestions,
-        settings,
         loading,
-        signUp,
-        login,
         signOut,
         loginAsGuest,
         addQuestion,
         voteQuestion,
         updateSettings,
         getTrendingQuestions,
-        loadUserStats,
-        addCalorieEntry,
-        getCalorieEntries,
-        getMonthlyCalories,
-        getYearlyCalories,
+        incrementQuestionsAsked,
+        incrementSupportsGiven,
       }}
     >
       {children}
