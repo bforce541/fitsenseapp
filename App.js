@@ -9,6 +9,7 @@ import AskAIScreen from './screens/AskAIScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import TrendingScreen from './screens/TrendingScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import CalorieTrackerScreen from './screens/CalorieTrackerScreen';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -59,6 +60,16 @@ const MainTabs = () => {
         }}
       />
       <Tab.Screen
+        name="Calories"
+        component={CalorieTrackerScreen}
+        options={{
+          title: 'Calories',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="fire" size={24} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
         name="Profile"
         component={ProfileScreen}
         options={{
@@ -84,14 +95,6 @@ const MainTabs = () => {
 
 const AppNavigator = () => {
   const { user, isGuest, loading } = useApp();
-
-  // Show loading state while checking auth - but don't block if it takes too long
-  if (loading) {
-    // Show login screen after a short delay to prevent infinite loading
-    setTimeout(() => {
-      // This will be handled by the state update
-    }, 100);
-  }
 
   return (
     <NavigationContainer>

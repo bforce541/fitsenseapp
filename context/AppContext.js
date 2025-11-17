@@ -27,14 +27,63 @@ export const AppProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Check for existing Supabase session
+    checkAuthSession();
     loadData();
     subscribeToQuestions();
+    
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email,
+        });
+        setIsGuest(false);
+        loadUserStats(session.user.id);
+      } else {
+        setUser(null);
+        setIsGuest(false);
+      }
+    });
+
     // Cleanup subscription on unmount
     return () => {
+      subscription.unsubscribe();
       const channel = supabase.channel('questions-changes');
       supabase.removeChannel(channel);
     };
   }, []);
+
+  const checkAuthSession = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email,
+        });
+        setIsGuest(false);
+        await AsyncStorage.setItem('user', JSON.stringify({
+          id: session.user.id,
+          email: session.user.email,
+        }));
+        await AsyncStorage.setItem('isGuest', 'false');
+        await loadUserStats(session.user.id);
+      } else {
+        // Check for local guest/user data
+        const storedUser = await AsyncStorage.getItem('user');
+        const storedGuest = await AsyncStorage.getItem('isGuest');
+        if (storedUser && storedGuest === 'true') {
+          const userData = JSON.parse(storedUser);
+          setUser(userData);
+          setIsGuest(true);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking auth session:', error);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -178,20 +227,98 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const signUp = async (email, password) => {
+    try {
+      console.log('Calling supabase.auth.signUp...');
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      console.log('Supabase signUp response:', { data, error });
+
+      if (error) {
+        console.error('Supabase signUp error:', error);
+        return { user: null, error: error.message };
+      }
+
+      // Note: Supabase may require email confirmation
+      // If email confirmation is enabled, data.user will be null until confirmed
+      // For now, we'll proceed if we get a session or user
+      if (data.user || data.session) {
+        const user = data.user || data.session?.user;
+        if (user) {
+          setUser({
+            id: user.id,
+            email: user.email,
+          });
+          setIsGuest(false);
+          await AsyncStorage.setItem('user', JSON.stringify({
+            id: user.id,
+            email: user.email,
+          }));
+          await AsyncStorage.setItem('isGuest', 'false');
+          await loadUserStats(user.id);
+          return { user, error: null };
+        }
+      }
+
+      // If email confirmation is required, user might be null but signup succeeded
+      if (data.user === null && !error) {
+        return { 
+          user: null, 
+          error: 'Please check your email to confirm your account. Then try logging in.' 
+        };
+      }
+
+      return { user: data.user, error: null };
+    } catch (error) {
+      console.error('Sign up error:', error);
+      return { user: null, error: error.message || 'Failed to create account' };
+    }
+  };
+
   const login = async (email, password) => {
     try {
-      // For now, simple login without Supabase Auth
-      // You can upgrade to Supabase Auth later
-      const userData = { email, id: `user_${Date.now()}` };
-      setUser(userData);
-      setIsGuest(false);
-      await AsyncStorage.setItem('user', JSON.stringify(userData));
-      await AsyncStorage.setItem('isGuest', 'false');
-      
-      // Initialize user stats if doesn't exist
-      await loadUserStats(userData.id);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      if (data.user) {
+        setUser({
+          id: data.user.id,
+          email: data.user.email,
+        });
+        setIsGuest(false);
+        await AsyncStorage.setItem('user', JSON.stringify({
+          id: data.user.id,
+          email: data.user.email,
+        }));
+        await AsyncStorage.setItem('isGuest', 'false');
+        await loadUserStats(data.user.id);
+      }
+
+      return { user: data.user, error: null };
     } catch (error) {
       console.error('Login error:', error);
+      return { user: null, error: error.message };
+    }
+  };
+
+  const signOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      
+      setUser(null);
+      setIsGuest(false);
+      await AsyncStorage.removeItem('user');
+      await AsyncStorage.removeItem('isGuest');
+    } catch (error) {
+      console.error('Sign out error:', error);
       throw error;
     }
   };
@@ -206,6 +333,10 @@ export const AppProvider = ({ children }) => {
 
   const addQuestion = async (question, answer) => {
     try {
+      if (!user?.id && !isGuest) {
+        throw new Error('Must be logged in to add questions');
+      }
+
       const newQuestion = {
         question,
         answer,
@@ -245,7 +376,7 @@ export const AppProvider = ({ children }) => {
           .from('user_stats')
           .upsert({
             user_id: user.id,
-            user_email: user.email,
+            user_email: user.email || '',
             questions_asked: newCount,
             supports_given: supportsGiven,
           }, { onConflict: 'user_id' });
@@ -353,6 +484,175 @@ export const AppProvider = ({ children }) => {
       .slice(0, 10);
   };
 
+  // Calorie tracking functions
+  const addCalorieEntry = async (date, calories) => {
+    try {
+      if (isGuest || !user?.id) {
+        throw new Error('Must be logged in to track calories');
+      }
+
+      // First, try to update existing entry for this date
+      const { data: existingData, error: checkError } = await supabase
+        .from('calorie_entries')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('date', date)
+        .single();
+
+      let result;
+      if (existingData) {
+        // Update existing entry
+        const { data, error } = await supabase
+          .from('calorie_entries')
+          .update({
+            calories: calories,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingData.id)
+          .select()
+          .single();
+        
+        if (error) throw error;
+        result = data;
+      } else {
+        // Insert new entry
+        const { data, error } = await supabase
+          .from('calorie_entries')
+          .insert({
+            user_id: user.id,
+            date: date,
+            calories: calories,
+          })
+          .select()
+          .single();
+        
+        if (error) throw error;
+        result = data;
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error adding calorie entry:', error);
+      throw error;
+    }
+  };
+
+  const getCalorieEntries = async (startDate, endDate) => {
+    try {
+      if (isGuest || !user?.id) {
+        return [];
+      }
+
+      const { data, error } = await supabase
+        .from('calorie_entries')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error getting calorie entries:', error);
+      return [];
+    }
+  };
+
+  const getMonthlyCalories = async () => {
+    try {
+      if (isGuest || !user?.id) {
+        return [];
+      }
+
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const { data, error } = await supabase
+        .from('calorie_entries')
+        .select('date, calories')
+        .eq('user_id', user.id)
+        .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
+        .lte('date', now.toISOString().split('T')[0])
+        .order('date', { ascending: true });
+
+      if (error) throw error;
+
+      // Fill in missing dates with 0 calories
+      const result = [];
+      for (let i = 29; i >= 0; i--) {
+        const date = new Date(now);
+        date.setDate(date.getDate() - i);
+        const dateStr = date.toISOString().split('T')[0];
+        const entry = data?.find(d => d.date === dateStr);
+        result.push({
+          date: dateStr,
+          calories: entry ? entry.calories : 0,
+        });
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error getting monthly calories:', error);
+      return [];
+    }
+  };
+
+  const getYearlyCalories = async () => {
+    try {
+      if (isGuest || !user?.id) {
+        return [];
+      }
+
+      const now = new Date();
+      const yearStart = new Date(now.getFullYear(), 0, 1);
+
+      const { data, error } = await supabase
+        .from('calorie_entries')
+        .select('date, calories')
+        .eq('user_id', user.id)
+        .gte('date', yearStart.toISOString().split('T')[0])
+        .lte('date', now.toISOString().split('T')[0])
+        .order('date', { ascending: true });
+
+      if (error) throw error;
+
+      // Group by month and calculate average
+      const monthlyData = {};
+      data?.forEach(entry => {
+        const date = new Date(entry.date);
+        const month = date.getMonth();
+        if (!monthlyData[month]) {
+          monthlyData[month] = { total: 0, count: 0 };
+        }
+        monthlyData[month].total += entry.calories;
+        monthlyData[month].count += 1;
+      });
+
+      // Create array with all 12 months
+      const result = [];
+      for (let month = 0; month < 12; month++) {
+        if (monthlyData[month]) {
+          result.push({
+            month: month,
+            avgCalories: Math.round(monthlyData[month].total / monthlyData[month].count),
+          });
+        } else {
+          result.push({
+            month: month,
+            avgCalories: 0,
+          });
+        }
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error getting yearly calories:', error);
+      return [];
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -364,12 +664,18 @@ export const AppProvider = ({ children }) => {
         votedQuestions,
         settings,
         loading,
+        signUp,
         login,
+        signOut,
         loginAsGuest,
         addQuestion,
         voteQuestion,
         updateSettings,
         getTrendingQuestions,
+        addCalorieEntry,
+        getCalorieEntries,
+        getMonthlyCalories,
+        getYearlyCalories,
       }}
     >
       {children}

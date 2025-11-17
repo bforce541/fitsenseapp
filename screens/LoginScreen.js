@@ -4,15 +4,64 @@ import { TextInput, Text } from 'react-native-paper';
 import { useApp } from '../context/AppContext';
 
 const LoginScreen = ({ navigation }) => {
-  const { login, loginAsGuest } = useApp();
+  const { signUp, login, loginAsGuest } = useApp();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = async () => {
-    if (email && password) {
-      await login(email, password);
-      navigation.replace('Main');
+  const handleSubmit = async () => {
+    if (!email || !password) {
+      setError('Please enter email and password');
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      let result;
+      if (isSignUp) {
+        console.log('Attempting sign up...');
+        result = await signUp(email, password);
+        console.log('Sign up result:', result);
+      } else {
+        console.log('Attempting login...');
+        result = await login(email, password);
+        console.log('Login result:', result);
+      }
+
+      if (result.error) {
+        setError(result.error);
+        console.error('Auth error:', result.error);
+      } else if (result.user) {
+        console.log('Auth successful, navigating...');
+        // Small delay to ensure state updates
+        setTimeout(() => {
+          navigation.replace('Main');
+        }, 100);
+      } else {
+        setError('Something went wrong. Please try again.');
+      }
+    } catch (err) {
+      console.error('Submit error:', err);
+      setError(err.message || 'An error occurred');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -75,21 +124,27 @@ const LoginScreen = ({ navigation }) => {
           />
         </View>
 
+        {error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+
         <TouchableOpacity
-          style={[styles.loginButton, (!email || !password) && styles.loginButtonDisabled]}
-          onPress={handleLogin}
-          disabled={!email || !password}
+          style={[styles.loginButton, (!email || !password || loading) && styles.loginButtonDisabled]}
+          onPress={handleSubmit}
+          disabled={!email || !password || loading}
         >
-          <Text style={styles.loginButtonText}>Login</Text>
+          <Text style={styles.loginButtonText}>
+            {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Login'}
+          </Text>
         </TouchableOpacity>
 
         <View style={styles.linkContainer}>
-          <TouchableOpacity>
-            <Text style={styles.linkText}>Forgot Password?</Text>
-          </TouchableOpacity>
-          <Text style={styles.linkSeparator}> • </Text>
-          <TouchableOpacity>
-            <Text style={styles.linkText}>Create Account</Text>
+          <TouchableOpacity onPress={() => setIsSignUp(!isSignUp)}>
+            <Text style={styles.linkText}>
+              {isSignUp ? 'Already have an account? Login' : "Don't have an account? Sign Up"}
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -181,6 +236,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     textDecorationLine: 'underline',
+  },
+  errorContainer: {
+    backgroundColor: '#FF3B30',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
 
