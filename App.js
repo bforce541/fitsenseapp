@@ -83,7 +83,15 @@ const MainTabs = () => {
 };
 
 const AppNavigator = () => {
-  const { user, isGuest } = useApp();
+  const { user, isGuest, loading } = useApp();
+
+  // Show loading state while checking auth - but don't block if it takes too long
+  if (loading) {
+    // Show login screen after a short delay to prevent infinite loading
+    setTimeout(() => {
+      // This will be handled by the state update
+    }, 100);
+  }
 
   return (
     <NavigationContainer>

@@ -29,11 +29,16 @@ export const AppProvider = ({ children }) => {
   useEffect(() => {
     loadData();
     subscribeToQuestions();
+    // Cleanup subscription on unmount
+    return () => {
+      const channel = supabase.channel('questions-changes');
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const loadData = async () => {
     try {
-      // Load local settings and guest status
+      // Load local settings and guest status first (fast)
       const storedSettings = await AsyncStorage.getItem('settings');
       const storedGuest = await AsyncStorage.getItem('isGuest');
       const storedUser = await AsyncStorage.getItem('user');
@@ -43,19 +48,26 @@ export const AppProvider = ({ children }) => {
       if (storedUser) {
         const userData = JSON.parse(storedUser);
         setUser(userData);
-        await loadUserStats(userData.id);
+        // Load stats in background
+        loadUserStats(userData.id).catch(e => console.log('Stats load error:', e));
       }
 
-      // Load all questions from Supabase
-      await loadQuestions();
+      // Set loading to false early so UI can render
+      setLoading(false);
+
+      // Load questions in background (may fail if Supabase not set up)
+      loadQuestions().catch(e => console.log('Questions load error:', e));
       
-      // Load user's votes if logged in
-      if (user?.id && !isGuest) {
-        await loadUserVotes(user.id);
+      // Load user's votes if logged in (in background)
+      if (storedUser) {
+        const userData = JSON.parse(storedUser);
+        if (userData.id && storedGuest !== 'true') {
+          loadUserVotes(userData.id).catch(e => console.log('Votes load error:', e));
+        }
       }
     } catch (error) {
       console.error('Error loading data:', error);
-    } finally {
+      // Always set loading to false even on error
       setLoading(false);
     }
   };
@@ -65,25 +77,38 @@ export const AppProvider = ({ children }) => {
       const { data, error } = await supabase
         .from('questions')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100); // Limit to prevent large queries
 
-      if (error) throw error;
+      if (error) {
+        // If table doesn't exist, just continue with empty array
+        if (error.code === 'PGRST116' || error.message?.includes('relation') || error.message?.includes('does not exist')) {
+          console.log('Questions table not found - using empty array');
+          setQuestions([]);
+          return;
+        }
+        throw error;
+      }
       if (data) {
         // Transform snake_case to camelCase for components
         const transformed = data.map(q => ({
           id: q.id,
           question: q.question,
           answer: q.answer,
-          supports: q.supports,
-          dontSupports: q.dont_supports, // Map to camelCase
+          supports: q.supports || 0,
+          dontSupports: q.dont_supports || 0, // Map to camelCase
           userId: q.user_id,
           userEmail: q.user_email,
           createdAt: q.created_at,
         }));
         setQuestions(transformed);
+      } else {
+        setQuestions([]);
       }
     } catch (error) {
       console.error('Error loading questions:', error);
+      // Set empty array on error so app doesn't hang
+      setQuestions([]);
     }
   };
 
@@ -128,19 +153,29 @@ export const AppProvider = ({ children }) => {
   };
 
   const subscribeToQuestions = () => {
-    const channel = supabase
-      .channel('questions-changes')
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'questions' },
-        (payload) => {
-          loadQuestions();
-        }
-      )
-      .subscribe();
+    try {
+      const channel = supabase
+        .channel('questions-changes')
+        .on('postgres_changes', 
+          { event: '*', schema: 'public', table: 'questions' },
+          (payload) => {
+            loadQuestions();
+          }
+        )
+        .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+      return () => {
+        try {
+          supabase.removeChannel(channel);
+        } catch (e) {
+          console.log('Error removing channel:', e);
+        }
+      };
+    } catch (error) {
+      console.log('Error setting up subscription:', error);
+      // Continue without subscription if it fails
+      return () => {};
+    }
   };
 
   const login = async (email, password) => {
