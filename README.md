@@ -1,15 +1,12 @@
 # FitSense - AI Fitness Companion
 
-
-FitSense — AI Fitness Companion
-
 A mobile fitness companion app built with React Native and Supabase, designed for reliable workout tracking, calorie logging, and daily fitness management. Developed as part of Project Assignment 3 with a focus on full-stack mobile integration, authentication, and clean UI architecture.
 
-Overview
+# Overview
 
 FitSense enables users to create accounts, track daily activity, store fitness entries in the cloud, and view personalized dashboards. The app uses Supabase for database and authentication while maintaining a modular, maintainable component structure on the frontend.
 
-Key Features
+# Key Features
 User Authentication
 
 Secure Supabase authentication (sign up, login, logout)
@@ -54,7 +51,7 @@ Modular screen organization
 
 Simple, intuitive layout
 
-Tech Stack
+# Tech Stack
 Frontend
 
 React Native
@@ -78,3 +75,6 @@ Async Storage
 Utility functions
 
 Environment variable management
+
+# Contributors 
+## Yoshua Alexander, Aryan Tomar
